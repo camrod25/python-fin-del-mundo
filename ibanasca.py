@@ -66,7 +66,7 @@ df_filtrado = df_filtrado[
 
 st.sidebar.markdown(f"**{len(df_filtrado):,} asteroides** con estos filtros")
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Catálogo", "Mapas", "Ficha", "Simulador", "¿Coincidimos?"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["Catálogo", "Mapas", "Ficha", "Simulador", "¿Coincidimos?", "Predicción ML", "Clasificador PHA"])
 
 with tab1:
     st.subheader("Catálogo de Asteroides NEA")
@@ -300,3 +300,64 @@ with tab5:
         st.success("Los resultados son idénticos — nuestra implementación es correcta.")
     else:
         st.warning(f"Diferencia numérica mínima por redondeo de punto flotante: {diferencia:.2e} km")
+
+import joblib
+
+modelo_reg = joblib.load("modelo_regresion.joblib")
+modelo_clf = joblib.load("modelo_clasificacion.joblib")
+
+with tab6:
+    st.subheader("Predicción de Diámetro con Modelo de Regresión")
+    st.write("""
+    Este modelo fue entrenado con datos reales del JPL.
+    Usa regresión lineal sobre variables logarítmicas para predecir
+    el diámetro de un asteroide a partir de su magnitud absoluta H y su albedo.
+    Con R² igual a 0.9905 explica el 99% de la varianza del diámetro.
+    """)
+
+    st.info("Este modelo fue entrenado con datos reales del JPL.")
+
+    st.divider()
+
+    col1, col2 = st.columns(2)
+    with col1:
+        H_reg = st.slider(
+            "Magnitud absoluta H",
+            min_value = 10.0,
+            max_value = 30.0,
+            value     = 19.2,
+            step      = 0.1,
+            help      = "Apophis: 19.2 | Bennu: 20.8 | Chelyabinsk: 26.0",
+            key       = "H_reg"
+        )
+    with col2:
+        albedo_reg = st.slider(
+            "Albedo visual",
+            min_value = 0.01,
+            max_value = 0.90,
+            value     = 0.30,
+            step      = 0.01,
+            help      = "Tipo S: ~0.20-0.30 | Tipo C: ~0.05-0.10",
+            key       = "albedo_reg"
+        )
+
+    # Paso 1 — transformamos el albedo igual que en el entrenamiento
+    log_albedo = np.log10(albedo_reg)
+
+    # Paso 2 — el modelo predice el logaritmo del diámetro
+    log_d_predicho = modelo_reg.predict([[H_reg, log_albedo]])[0]
+
+    # Paso 3 — revertimos el logaritmo para obtener el diámetro en km
+    d_predicho = 10 ** log_d_predicho
+
+    # Paso 4 — calculamos el diámetro con Harris para comparar
+    d_harris = (1329 / np.sqrt(albedo_reg)) * 10**(-0.2 * H_reg)
+
+    st.divider()
+    st.subheader("Resultado")
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Predicción del modelo ML", f"{d_predicho:.3f} km")
+    c2.metric("Fórmula de Harris",        f"{d_harris:.3f} km")
+    diferencia_reg = abs(d_predicho - d_harris)
+    c3.metric("Diferencia",               f"{diferencia_reg:.3f} km")
